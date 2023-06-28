@@ -1,0 +1,303 @@
+---
+title:  "DNA/RNA Dynamics - Module 2 - Final Project"
+author: "Leonardo Politi"
+date: "2023-06-28"
+output: html_document
+---
+
+```{r}
+suppressMessages(library(minfi))
+
+data_path = "C:/Users/cicci/Desktop/DRD_project/data/Input"
+clean_Manifest_path = "C:/Users/cicci/Desktop/DRD_project/data/Illumina450Manifest_clean.RData"
+```
+
+### 1. Load raw data with minfi and create an object called RGset storing the RGChannelSet object: 
+
+```{r}
+targets <- suppressMessages(read.metharray.sheet(data_path))
+RGset <- read.metharray.exp(targets = targets) 
+```
+
+### 2. Create the dataframes Red and Green to store the red and green fluorescence respectively: 
+
+```{r}
+Green <- data.frame(getGreen(RGset))
+Red <- data.frame(getRed(RGset))
+```
+
+### 3a. Red and Green fluorescence of address: 10715421 
+
+```{r}
+Green[rownames(Green)=="10715421",] 
+Red[rownames(Red)=="10715421",]
+```
+
+### 3b. Check in the manifest file if the address corresponds to a Type I or a Type II probe and, in case of Type I probe, report its color:
+
+```{r}
+load(clean_Manifest_path)
+Illumina450Manifest_clean[Illumina450Manifest_clean$AddressA_ID=="10715421",]
+```
+
+### 4. Create the object MSet.raw 
+
+```{r}
+MSet.raw <- preprocessRaw(RGset)
+```
+
+### 5a. QC plot:
+
+```{r}
+qc <- getQC(MSet.raw)
+plotQC(qc)
+```
+
+### 5b. Check the intensity of negative controls using minfi:
+
+```{r}
+controlStripPlot(RGset, controls="NEGATIVE")
+```
+
+### 5c. calculate detection pValues; and count, for each sample, how many probes have a detection p-value higher than 0.01
+
+```{r}
+detP <- detectionP(RGset)
+failed <- detP>0.01  
+summary(failed)
+```
+
+### 6. Calculate raw beta and M values and plot the densities of mean methylation values, dividing the samples in WT and MUT.
+
+```{r}
+b <- getBeta(MSet.raw)
+M <- getM(MSet.raw)
+```
+
+```{r}
+M_MUT <- M[,c(targets$Group == 'MUT')]
+M_WT <- M[,c(targets$Group == 'WT')]
+
+b_MUT <- b[,c(targets$Group == 'MUT')]
+b_WT <- b[,c(targets$Group == 'WT')]
+
+mean_of_M_MUT <- apply(M_MUT,1,mean)
+mean_of_M_MUT <- na.omit(mean_of_M_MUT)
+d_mean_of_M_MUT <- density(mean_of_M_MUT)
+
+mean_of_M_WT <- apply(M_WT,1,mean)
+mean_of_M_WT <- na.omit(mean_of_M_WT)
+d_mean_of_M_WT <- density(mean_of_M_WT)
+
+mean_of_b_MUT <- apply(b_MUT,1,mean)
+mean_of_b_MUT <- na.omit(mean_of_b_MUT)
+d_mean_of_b_MUT <- density(mean_of_b_MUT)
+
+mean_of_b_WT <- apply(b_WT,1,mean)
+mean_of_b_WT <- na.omit(mean_of_b_WT)
+d_mean_of_b_WT <- density(mean_of_b_WT)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(d_mean_of_M_MUT,main="Density of M Values (MUT)",col="lightblue")
+plot(d_mean_of_M_WT,main="Density of M Values (WT)",col="blue")
+plot(d_mean_of_b_MUT,main="Density of b Values (MUT)",col="orange")
+plot(d_mean_of_b_WT,main="Density of b Values (WT)",col="red")
+```
+
+### 7.	Normalize the data using 'preprocessNoob' and compare raw data and normalized data. Produce a plot with 6 panels in which, for both raw and normalized data, you show the density plots of beta mean values according to the chemistry of the probes, the density plot of beta standard deviation values according to the chemistry of the probes and the boxplot of beta values. 
+
+```{r}
+dfI <- Illumina450Manifest_clean[Illumina450Manifest_clean$Infinium_Design_Type=="I",] 
+dfI <- droplevels(dfI)
+dfII <- Illumina450Manifest_clean[Illumina450Manifest_clean$Infinium_Design_Type=="II",]
+dfII <- droplevels(dfII)
+
+b_I <- b[rownames(b) %in% dfI$IlmnID,]
+b_II <- b[rownames(b) %in% dfII$IlmnID,]
+```
+
+```{r}
+mean_of_b_I <- apply(b_I,1,mean)
+mean_of_b_I <- na.omit(mean_of_b_I)
+d_mean_of_b_I <- density(mean_of_b_I) 
+
+mean_of_b_II <- apply(b_II,1,mean)
+mean_of_b_II <- na.omit(mean_of_b_II)
+d_mean_of_b_II <- density(mean_of_b_II)
+```
+
+```{r}
+sd_of_b_I <- apply(b_I,1,sd)
+sd_of_b_I <- na.omit(sd_of_b_I)
+d_sd_of_b_I <- density(sd_of_b_I,)
+
+sd_of_b_II <- apply(b_II,1,sd)
+sd_of_b_II <- na.omit(sd_of_b_II)
+d_sd_of_b_II <- density(sd_of_b_II)
+
+preprocessNoob_results <- preprocessNoob(RGset)
+b_preprocessNoob <- getBeta(preprocessNoob_results)
+```
+
+```{r}
+b_preprocessNoob_I <- b_preprocessNoob[rownames(b_preprocessNoob) %in% dfI$IlmnID,]
+b_preprocessNoob_II <- b_preprocessNoob[rownames(b_preprocessNoob) %in% dfII$IlmnID,]
+```
+
+```{r}
+mean_of_b_preprocessNoob_I <- apply(b_preprocessNoob_I,1,mean)
+d_mean_of_b_preprocessNoob_I <- density(mean_of_b_preprocessNoob_I,na.rm=T)
+
+mean_of_b_preprocessNoob_II <- apply(b_preprocessNoob_II,1,mean)
+d_mean_of_b_preprocessNoob_II <- density(mean_of_b_preprocessNoob_II,na.rm=T)
+```
+
+```{r}
+sd_of_b_preprocessNoob_I <- apply(b_preprocessNoob_I,1,sd)
+d_sd_of_b_preprocessNoob_I <- density(sd_of_b_preprocessNoob_I,na.rm=T)
+
+sd_of_b_preprocessNoob_II <- apply(b_preprocessNoob_II,1,sd)
+d_sd_of_b_preprocessNoob_II <- density(sd_of_b_preprocessNoob_II,na.rm=T)
+```
+
+```{r}
+Group = factor(targets$Group,levels = unique(targets$Group))
+
+par(mfrow=c(2,3))
+palette(c("orange","lightblue"))
+plot(d_mean_of_b_I,col="blue",main="raw beta",xlim=c(-0.1,1.1),ylim=c(0,6))
+lines(d_mean_of_b_II,col="red")
+plot(d_sd_of_b_I,col="blue",main="raw sd",xlim=c(0,0.6),ylim=c(0,50))
+lines(d_sd_of_b_II,col="red")
+boxplot(b,col = Group,ylim=c(0,1))
+plot(d_mean_of_b_preprocessNoob_I,col="blue",main="preprocessNoob beta",xlim=c(-0.1,1.1),ylim=c(0,6))
+lines(d_mean_of_b_preprocessNoob_II,col="red")
+plot(d_sd_of_b_preprocessNoob_I,col="blue",main="preprocessNoob sd",xlim=c(0,0.6),ylim=c(0,50))
+lines(d_sd_of_b_preprocessNoob_II,col="red")
+boxplot(b_preprocessNoob,col = Group,ylim=c(0,1)) 
+```
+
+### 8. PCA 
+
+```{r}
+pca_results <- prcomp(t(b_preprocessNoob),scale=T)
+
+samples = rownames(pca_results$x)
+sample_labels = substr(samples, nchar(samples) - 5, nchar(samples)) 
+```
+
+#### 8a. Group
+
+```{r}
+palette(c("blue","red"))
+plot(pca_results$x[,1], pca_results$x[,2],cex=2,pch=2,col=Group,xlab="PC1",ylab="PC2",xlim=c(-700,700),ylim=c(-1000,1000))
+text(pca_results$x[,1], pca_results$x[,2],labels=sample_labels,cex=0.5,pos=1)
+legend("bottomright",legend=levels(Group),col=c(1:nlevels(Group)),pch=2)
+```
+
+### 8b. Sex
+
+```{r}
+Gender = factor(targets$Sex,levels = unique(targets$Sex))
+
+palette(c("blue","red"))
+plot(pca_results$x[,1], pca_results$x[,2],cex=2,pch=2,col=Gender,xlab="PC1",ylab="PC2",xlim=c(-700,700),ylim=c(-1000,1000))
+text(pca_results$x[,1], pca_results$x[,2],labels=sample_labels,cex=0.5,pos=1)
+legend("bottomright",legend=levels(Gender),col=c(1:nlevels(Gender)),pch=2)
+```
+
+### 8c. Batch
+
+```{r}
+sub_Sentrix_ID = substr(targets$Basename, start = nchar(targets$Basename) -2, stop = nchar(targets$Basename))
+Batch = factor(sub_Sentrix_ID,levels = unique(sub_Sentrix_ID))
+
+palette(c("blue","red"))
+plot(pca_results$x[,1], pca_results$x[,2],cex=2,pch=2,col=Batch,xlab="PC1",ylab="PC2",xlim=c(-700,700),ylim=c(-1000,1000))
+text(pca_results$x[,1], pca_results$x[,2],labels=sample_labels,cex=0.5,pos=1)
+legend("bottomright",legend=levels(Batch),col=c(1:nlevels(Batch)),pch=2)
+```
+
+### 9. identify differentially methylated probes between group WT and group MUT using t-test.
+
+```{r}
+ttest_pvalue <- function(x) {
+  t_test <- t.test(x~ Group)
+  return(t_test$p.value)
+} 
+
+pValues_ttest <- apply(b_preprocessNoob,1, ttest_pvalue)
+
+final_ttest <- data.frame(b_preprocessNoob, pValues_ttest)
+
+final_ttest_0.05 <- final_ttest[final_ttest$pValues_ttest<=0.05,] 
+dim(final_ttest_0.05)[1]
+```
+
+### 10. Apply multiple test correction with a significant threshold of 0.05.
+
+```{r}
+corrected_pValues_BH <- p.adjust(final_ttest$pValues_ttest,"BH") 
+corrected_pValues_Bonf <- p.adjust(final_ttest$pValues_ttest,"bonferroni")
+final_ttest_corrected <- data.frame(final_ttest, corrected_pValues_BH, corrected_pValues_Bonf)
+
+final_corrected_BH_0.05 <- final_ttest_corrected[final_ttest_corrected$corrected_pValues_BH<=0.05,]
+dim(final_corrected_BH_0.05)[1]
+
+final_corrected_Bonf_0.05 <- final_ttest_corrected[final_ttest_corrected$corrected_pValues_Bonf<=0.05,]
+dim(final_corrected_Bonf_0.05)[1]
+```
+
+### 11a. Volcano Plot
+
+```{r}
+b_preprocessNoob_groupMUT <- b_preprocessNoob[,Group=="MUT"]
+mean_b_preprocessNoob_groupMUT <- apply(b_preprocessNoob_groupMUT,1,mean)
+b_preprocessNoob_groupWT <- b_preprocessNoob[,Group=="WT"]
+mean_b_preprocessNoob_groupWT <- apply(b_preprocessNoob_groupWT,1,mean)
+
+delta <- mean_b_preprocessNoob_groupMUT-mean_b_preprocessNoob_groupWT
+
+toVolcPlot <- data.frame(delta, -log10(final_ttest_corrected$pValues_ttest))
+
+plot(toVolcPlot[,1], toVolcPlot[,2],pch=16,cex=0.5, xlab = "mean methylation differences", ylab = "-log10(P)")
+Highlight_left <- toVolcPlot[toVolcPlot[,1]< -0.1 & toVolcPlot[,2]>(-log10(0.01)),]
+Highlight_right <- toVolcPlot[toVolcPlot[,1]> 0.1 & toVolcPlot[,2]>(-log10(0.01)),]
+points(Highlight_left[,1], Highlight_left[,2],pch=16,cex=0.7,col=("red")) 
+points(Highlight_right[,1], Highlight_right[,2],pch=16,cex=0.7,col=("green"))
+```
+
+### 11b. Manhattan Plot
+
+```{r}
+suppressMessages(library(qqman))
+
+final_ttest <- data.frame(rownames(final_ttest),final_ttest)
+colnames(final_ttest)[1] <- "IlmnID"
+final_ttest_annotated <- merge(final_ttest, Illumina450Manifest_clean,by="IlmnID")
+
+input_Manhattan <- final_ttest_annotated[colnames(final_ttest_annotated) %in% c("IlmnID","CHR","MAPINFO","pValues_ttest")]
+order_chr <- c("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","X","Y")
+input_Manhattan$CHR <- factor(input_Manhattan$CHR,levels=order_chr )
+input_Manhattan$CHR <- as.numeric(input_Manhattan$CHR)
+
+manhattan(input_Manhattan, snp="IlmnID",chr="CHR", bp="MAPINFO", p="pValues_ttest",annotatePval = 0.00001,col= rainbow(24))
+```
+
+### 12. Heat Map - average linkage
+
+```{r}
+suppressMessages(library(gplots))
+
+final_ttest <- final_ttest[order(final_ttest$pValues_ttest),]
+input_heatmap=as.matrix(final_ttest[1:100,2:9]) 
+
+colorbar <- c("green","red","green","green","red","red","green","red")
+
+
+col2=colorRampPalette(c("green","black","red"))(100)
+heatmap.2(input_heatmap,col=col2,Rowv=T,Colv=T, hclustfun = function(x) hclust(x,method = 'average'), dendrogram="both",key=T,ColSideColors=colorbar,density.info="none",trace="none",scale="none",symm=F, main="Average linkage")
+```
+
